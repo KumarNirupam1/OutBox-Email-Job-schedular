@@ -1,16 +1,9 @@
 "use client";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { EmailJob } from "@/lib/types";
+import type { EmailJob } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Clock, Send, AlertCircle } from "lucide-react";
+import Link from "next/link";
 
 interface EmailTableProps {
   emails: EmailJob[];
@@ -19,93 +12,83 @@ interface EmailTableProps {
   type: "scheduled" | "sent";
 }
 
-export function EmailTable({ emails, isLoading, isError, type }: EmailTableProps) {
-  // 1. Loading State (Skeleton)
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-12 w-full animate-pulse rounded-md bg-gray-100" />
-        ))}
-      </div>
-    );
-  }
+function getRecipientName(email: string) {
+  const localPart = email.split("@")[0] || email;
 
-  // 2. Error State
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center text-red-500">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p className="font-medium">Failed to load emails.</p>
-        <p className="text-sm text-gray-500">Please check your connection and try again.</p>
-      </div>
-    );
-  }
-
-  // 3. Empty State
-  if (!emails || emails.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center text-gray-500">
-        {type === "scheduled" ? (
-          <Clock className="mb-4 h-12 w-12 text-gray-300" />
-        ) : (
-          <Send className="mb-4 h-12 w-12 text-gray-300" />
-        )}
-        <p className="text-lg font-medium">
-          {type === "scheduled" ? "No scheduled emails" : "No sent emails yet"}
-        </p>
-        <p className="text-sm">
-          {type === "scheduled" 
-            ? 'Click "Compose" to schedule your first email.' 
-            : "Your sent emails will appear here."}
-        </p>
-      </div>
-    );
-  }
-
-  // 4. Data State
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Recipient</TableHead>
-          <TableHead>Subject</TableHead>
-          <TableHead>{type === "scheduled" ? "Scheduled Time" : "Sent Time"}</TableHead>
-          <TableHead className="text-right">Status</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {emails.map((email) => (
-          <TableRow key={email.id} className="cursor-pointer hover:bg-gray-50">
-            <TableCell className="font-medium">{email.recipientEmail}</TableCell>
-            <TableCell className="max-w-[300px] truncate">{email.subject}</TableCell>
-            <TableCell>
-              {format(
-                new Date(type === "scheduled" ? email.scheduledAt : email.sentAt || email.scheduledAt),
-                "MMM dd, yyyy HH:mm"
-              )}
-            </TableCell>
-            <TableCell className="text-right">
-              <StatusBadge status={email.status} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-// Helper component for Status Badges
-function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    PENDING: "bg-orange-100 text-orange-800",
-    SENT: "bg-green-100 text-green-800",
-    FAILED: "bg-red-100 text-red-800",
-  };
+export function EmailTable({ emails, isLoading, isError, type }: EmailTableProps) {
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center px-4 py-3 text-sm text-muted-foreground">
+        Loading emails...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-64 items-center justify-center px-4 py-3 text-sm text-destructive">
+        Failed to load emails
+      </div>
+    );
+  }
+
+  if (!emails || emails.length === 0) {
+    return (
+      <div className="flex h-64 items-center justify-center px-4 py-3 text-sm text-muted-foreground">
+        No emails found
+      </div>
+    );
+  }
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status as keyof typeof styles] || "bg-gray-100 text-gray-800"}`}>
-      {status}
-    </span>
+    <div className="space-y-1 divide-y divide-gray-100">
+      {emails.map((email) => {
+        const bodyPreview = email.body?.trim() || "No preview available";
+        const preview = bodyPreview.length > 100
+          ? `${bodyPreview.slice(0, 100)}...`
+          : bodyPreview;
+        const isScheduled = type === "scheduled";
+        const timestamp = isScheduled
+          ? format(new Date(email.scheduledAt), "MMM dd, yyyy HH:mm")
+          : null;
+
+        return (
+          <Link
+            key={email.id}
+            href={`/dashboard/emails/${email.id}`}
+            className="flex min-w-0 items-center gap-4 px-4 py-3 transition-colors hover:bg-green-50/50"
+          >
+            <div className="flex w-44 shrink-0 items-baseline gap-2">
+              <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                To: {getRecipientName(email.recipientEmail)}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                    isScheduled
+                      ? "bg-amber-50 text-amber-700 ring-amber-200/50"
+                      : "bg-green-50 text-green-700 ring-green-200/50"
+                  )}
+                >
+                  {isScheduled ? timestamp : "Sent"}
+                </span>
+                <span className="min-w-0 truncate text-sm text-gray-700">
+                  <span className="font-medium">{email.subject}</span>
+                  <span className="text-gray-400"> - {preview}</span>
+                </span>
+              </div>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
   );
 }

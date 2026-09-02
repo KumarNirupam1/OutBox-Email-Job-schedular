@@ -8,18 +8,14 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      {/* Top Header */}
-      <Suspense fallback={<div className="h-14 border-b bg-background" />}>
-        <Header />
-      </Suspense>
+    <div className="flex min-h-screen bg-background text-foreground">
+      <Sidebar />
 
-      <div className="flex flex-1">
-        {/* Left Sidebar */}
-        <Sidebar />
-
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-6">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Suspense fallback={<div className="h-14 border-b bg-background" />}>
+          <Header />
+        </Suspense>
+        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 md:px-6">
           {children}
         </main>
       </div>

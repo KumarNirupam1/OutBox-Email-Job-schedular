@@ -1,3 +1,4 @@
+// features/emails/api/email.ts
 import { EmailJob, SchedulePayload } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -5,7 +6,7 @@ const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 async function fetchWithAuth(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    credentials: "include", // CRITICAL: Sends Better Auth cookies
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
@@ -22,7 +23,10 @@ async function fetchWithAuth(endpoint: string, options?: RequestInit) {
 export const emailApi = {
   getScheduled: () =>
     fetchWithAuth("/api/emails/scheduled") as Promise<EmailJob[]>,
-  getSent: () => fetchWithAuth("/api/emails/sent") as Promise<EmailJob[]>,
+  getSent: () => 
+    fetchWithAuth("/api/emails/sent") as Promise<EmailJob[]>,
+  getById: (id: string) =>
+    fetchWithAuth(`/api/emails/${encodeURIComponent(id)}`) as Promise<EmailJob>,
   schedule: (data: SchedulePayload) =>
     fetchWithAuth("/api/emails/schedule", {
       method: "POST",

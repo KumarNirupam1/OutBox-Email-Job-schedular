@@ -132,4 +132,27 @@ router.get('/sent', async (req, res) => {
   }
 });
 
+router.get('/:id', async (req, res) => {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const emailJob = await prisma.emailJob.findFirst({
+      where: { id: req.params.id, userId: session.user.id },
+      include: { sender: true },
+    });
+
+    if (!emailJob) {
+      return res.status(404).json({ error: 'Email not found' });
+    }
+
+    return res.json(emailJob);
+  } catch (error) {
+    console.error('❌ Email detail error:', error);
+    return res.status(500).json({ error: 'Failed to fetch email' });
+  }
+});
+
 export default router;

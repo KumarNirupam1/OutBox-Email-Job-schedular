@@ -9,7 +9,7 @@ export default function ComposePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboard/scheduled">
-          <ArrowLeft className="h-5 w-5 text-gray-500 hover:text-gray-900" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />
         </Link>
         <h2 className="text-2xl font-bold tracking-tight">Compose Campaign</h2>
       </div>
