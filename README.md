@@ -28,17 +28,44 @@ OutBox/
 | **BullMQ dashboard** | Live queue visibility at `/admin/queues` (Bull Board). |
 | **Slack notification** | Real OAuth connect flow (`/api/slack/connect` → `/callback` → `/status`); a live webhook message is sent to Slack the moment a sender's hourly limit is reached. If Slack isn't connected, notifications silently no-op (no crash); reconnect works via upsert. |
 | **Ethereal SMTP** | Emails are sent via Ethereal fake SMTP; preview URLs are logged by the worker. |
+| **Attachments (bonus)** | Optional file attachments per email — base64-encoded from the compose UI, validated (max 20 files / 10 MB total), stored as a JSON column, and decoded back to binary before being added to the `sendMail` call. |
 
 ### Frontend
 | Area | Description |
 |------|-------------|
 | **Login** | Real Google OAuth (better-auth). After login, redirect to dashboard. Header shows the user's **name, email and avatar**, with a **Logout** option. |
 | **Dashboard** | Main UI with top header, sidebar (Scheduled / Sent), and a "Compose" button. |
-| **Compose** | Subject + rich-text body, **CSV/text lead upload** (parsed for email addresses), start time, delay-between-emails, and hourly limit. Schedules through the backend API. |
+| **Compose** | Subject + rich-text body, **CSV/text lead upload** (parsed for email addresses, showing the count detected), optional **file attachments**, start time, delay-between-emails, and hourly limit. Schedules through the backend API. |
 | **Scheduled emails** | Table of email / subject / scheduled time / status with loading + empty states. |
 | **Sent emails** | Table of email / subject / sent time / status (sent/failed) with loading + empty states. |
 | **Search** | Debounced, page-scoped search (scheduled page filters `PENDING`, sent page filters `SENT/FAILED`) pulling from Elasticsearch via the backend. |
 | **Refresh** | Refreshes the current page's list with a spinning indicator. |
+
+---
+
+## Requirement checklist (mapped to the assignment)
+
+| Requirement | Status | Where |
+|---|---|---|
+| Express + TypeScript backend | ✅ | `server/` |
+| Next.js + Tailwind + TypeScript frontend | ✅ | `client/` |
+| PostgreSQL + Prisma | ✅ | `server/prisma/schema.prisma` |
+| Accept email send requests via API | ✅ | `POST /api/emails/schedule` |
+| Schedule via BullMQ delayed jobs (no cron) | ✅ | `server/src/lib/queue.ts` |
+| Send via Ethereal SMTP (multiple senders) | ✅ | per-sender Ethereal transport |
+| Searchable via Elasticsearch | ✅ | `search.service.ts` + `elastic.ts` |
+| Live BullMQ dashboard | ✅ | `/admin/queues` (Bull Board) |
+| Survives restart, no duplication | ✅ | Redis-delayed jobs + DB idempotency check |
+| Configurable worker concurrency | ✅ | `WORKER_CONCURRENCY` |
+| Min delay between sends | ✅ | BullMQ limiter, default 2s |
+| Per-sender hourly rate limit (env-configurable) | ✅ | `MAX_EMAILS_PER_HOUR_PER_SENDER`, `SENDER_LIMITS` |
+| Rate-limit state safe across instances | ✅ | atomic Redis counters |
+| On limit hit: reschedule (don't drop) | ✅ | `moveToDelayed(nextHourWindow)` |
+| Slack notification on limit hit (live OAuth) | ✅ | `slack.routes.ts` + webhook |
+| Google OAuth login, name/email/avatar/logout | ✅ | better-auth |
+| Compose: subject, body, CSV upload, start time, delay, hourly limit | ✅ | `ComposeForm.tsx` |
+| Scheduled + Sent tables with loading/empty states | ✅ | dashboard pages |
+| Attachments (bonus, beyond spec) | ✅ | full-stack, base64 → JSON → nodemailer |
 
 ---
 
@@ -188,5 +215,39 @@ npm run dev        # http://localhost:3000
 ## Notes / trade-offs
 
 - Senders are Ethereal test accounts created automatically for the logged-in user (`POST /api/senders`) so the "From" address is the user's own email without manual SMTP config.
-- Attachment upload is collected in the compose UI but not yet transmitted to the backend; sending attachments would require adding an `attachments` field to the `EmailJob` schema + a Prisma migration and extending the worker's `sendMail`.
 - The demo uses Ethereal, so emails aren't actually delivered — preview URLs are printed in the worker logs.
+
+---
+
+## Architecture overview & key decisions
+
+### Request flow
+1. `POST /api/emails/schedule` → auth session check → zod validation → sender ownership check → create `EmailJob` row (Postgres) → index in Elasticsearch → add to BullMQ `email-sending` queue **with `delay = scheduledAt - now`**.
+2. The `email.worker.ts` worker (started in-process with the Express API) picks up due jobs → applies per-sender hourly rate limiting → sends via Ethereal SMTP → marks the row `SENT`/`FAILED` → updates the Elasticsearch index.
+
+### Why BullMQ delayed jobs instead of cron
+The assignment forbids cron. BullMQ stores delayed jobs in **Redis**, so scheduled times are persisted outside the process. This worker + queue both use the `email-sending` queue name (`src/lib/queue.ts` + `src/workers/email.worker.ts`).
+
+### How persistence across restarts works
+- Delayed/pending jobs live in Redis; after a restart BullMQ **resumes them at their original scheduled times** (BullMQ re-schedules due delayed jobs every second).
+- **Idempotency:** the worker re-reads the job from Postgres before sending and **skips rows already `SENT`/`FAILED`**. So an email is never sent twice, even if the same job is retried or the server restarts mid-send.
+
+### Rate limiting & concurrency — and the mapping to the assignment
+| Requirement | Implementation |
+|---|---|
+| Configurable worker concurrency | `WORKER_CONCURRENCY` passed to the BullMQ `Worker` (parallel-safe; jobs re-fetch their own DB row). |
+| Min delay between sends | BullMQ worker `limiter` (`max: 1, duration: MIN_DELAY_MS`, default 2000 ms → "min 2s between sends"). |
+| Emails per hour (global) | `MAX_EMAILS_PER_HOUR` via **Redis** counters. |
+| Emails per hour (per-sender) | `MAX_EMAILS_PER_HOUR_PER_SENDER` global-per-sender + `SENDER_LIMITS` per-email map. |
+| Safe across multiple workers/instances | Counters are atomic **Redis `INCR`** keyed `ratelimit:<senderId>:<hourWindow>` with a 1h TTL — not in-memory. |
+| When limit is hit — do not drop | `job.moveToDelayed(toNextHourWindow + jitter)` reschedules into the **next hour window** instead of failing, preserving order. |
+| Slack notification on limit hit | Live OAuth → a real webhook message is sent the moment a sender hits its hourly limit (verified in the demo). If not connected, it silently no-ops; reconnecting works via upsert without redeploy. |
+
+### Search
+Indexed into Elasticsearch (`email_jobs`) with `attachmentNames` also searchable. If ES is down/not configured, the API transparently falls back to a Postgres `ILIKE` query so search never breaks.
+
+### Other decisions
+- **Better Auth** for Google OAuth (session stored in Postgres) — handles the auth flow robustly without custom crypto.
+- **Ethereal senders auto-created per user** — no manual SMTP setup; the "From" is the user's own email.
+- **No cron anywhere** — verified; scheduling is exclusively BullMQ delayed jobs.
+- **Backend returns full rows (with sender) from Postgres after an ES hit** — keeps the API shape consistent and lets the frontend render sender info.
