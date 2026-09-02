@@ -18,6 +18,12 @@ model Test {
 
 }
 
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id            String    @id
   name          String
@@ -31,6 +37,10 @@ model User {
 
   @@unique([email])
   @@map("user")
+
+  senders          Sender[]
+  emailJobs        EmailJob[]
+  slackIntegration SlackIntegration?
 }
 
 model Session {
@@ -81,4 +91,49 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+model SlackIntegration {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  webhookUrl  String
+  channelName String?
+  teamName    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Sender {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String
+  smtpHost  String
+  smtpPort  Int
+  smtpUser  String
+  smtpPass  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emailJobs EmailJob[]
+}
+
+model EmailJob {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         Sender      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  
+  recipientEmail String
+  subject        String
+  body           String
+  
+  status         EmailStatus @default(PENDING)
+  scheduledAt    DateTime
+  sentAt         DateTime?
+  errorMessage   String?
+  
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }
