@@ -1,5 +1,6 @@
 import { esClient } from '../lib/elastic';
 import { prisma } from '../lib/db';
+import type { EmailStatus } from '../generated/prisma/enums.js';
 
 const INDEX_NAME = 'email_jobs';
 
@@ -22,6 +23,7 @@ export async function indexEmailJob(emailJob: any) {
         status: emailJob.status,
         scheduledAt: emailJob.scheduledAt,
         sentAt: emailJob.sentAt,
+        attachmentNames: (emailJob.attachments ?? []).map((a: any) => a?.name).filter(Boolean),
       },
     });
   } catch (error) {
@@ -56,7 +58,7 @@ export async function searchEmails(userId: string, query: string, statuses?: str
             {
               multi_match: {
                 query,
-                fields: ['recipientEmail', 'subject', 'body'],
+                fields: ['recipientEmail', 'subject', 'body', 'attachmentNames'],
               },
             },
           ],
@@ -68,7 +70,9 @@ export async function searchEmails(userId: string, query: string, statuses?: str
     });
 
     const sourceIds = response.hits.hits.flatMap((hit) =>
-      hit._source && hit._source.id ? [hit._source.id] : [],
+      hit._source && (hit._source as { id?: string }).id
+        ? [(hit._source as { id?: string }).id as string]
+        : [],
     );
 
     // Return nothing if ES matched no documents.
@@ -82,9 +86,10 @@ export async function searchEmails(userId: string, query: string, statuses?: str
       where: {
         userId,
         id: { in: sourceIds },
-        ...(statusTerms && { status: { in: statuses } }),
+        ...(statusTerms && { status: { in: statuses as EmailStatus[] } }),
       },
       include: { sender: true },
+      orderBy: { scheduledAt: 'desc' },
     });
   } catch (error) {
     console.error('❌ Elasticsearch search failed, falling back to Postgres:', error);
@@ -98,7 +103,7 @@ export async function searchEmails(userId: string, query: string, statuses?: str
           { subject: { contains: query, mode: 'insensitive' } },
           { body: { contains: query, mode: 'insensitive' } },
         ],
-        ...(statuses && statuses.length > 0 && { status: { in: statuses } }),
+        ...(statuses && statuses.length > 0 && { status: { in: statuses as EmailStatus[] } }),
       },
       include: { sender: true },
       orderBy: { scheduledAt: 'desc' },

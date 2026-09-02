@@ -38,6 +38,19 @@ interface ComposeUser {
   email: string;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1] ?? "";
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ComposeForm() {
   const router = useRouter();
   const scheduleEmail = useScheduleEmail();
@@ -159,7 +172,7 @@ export function ComposeForm() {
     const pending = recipientInput.trim()
       ? [...recipients, ...recipientInput.split(/[,\s]+/).map((e) => e.trim()).filter((e) => e.includes("@") && e.length > 5)]
       : recipients;
-      
+
     if (!pending.length || !subject.trim() || !editor?.getText().trim()) {
       alert("Please add recipients, a subject, and email content.");
       return;
@@ -177,6 +190,26 @@ export function ComposeForm() {
     }
 
     setIsSubmitting(true);
+
+    // Convert selected files to base64 once so they are shared across recipients.
+    let attachmentPayloads: { name: string; type: string; size: number; base64: string }[] = [];
+    try {
+      attachmentPayloads = await Promise.all(
+        attachments.map((file) =>
+          fileToBase64(file).then((base64) => ({
+            name: file.name,
+            type: file.type || "application/octet-stream",
+            size: file.size,
+            base64,
+          })),
+        ),
+      );
+    } catch {
+      alert("Failed to read one or more attachments.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const baseTime = new Date(startTime).getTime();
     const delayMs = delayMinutes * 60000;
     const limitDelayMs = hourlyLimit > 0 ? 3600000 / hourlyLimit : 0;
@@ -191,6 +224,7 @@ export function ComposeForm() {
           body,
           senderId: sender.id,
           scheduledAt: new Date(baseTime + index * stepMs).toISOString(),
+          ...(attachmentPayloads.length > 0 ? { attachments: attachmentPayloads } : {}),
         });
         successCount += 1;
       }

@@ -8,15 +8,15 @@ import { redisConnection } from '../lib/redis';
 import { prisma } from '../lib/db';
 import { getEtherealTransporter } from '../utils/ethereal';
 import { sendSlackNotification } from '../utils/slack';
-import { checkRateLimit } from '../utils/rateLimiter';
+import { checkRateLimit, resolvePerSenderLimit } from '../utils/rateLimiter';
 import { indexEmailJob } from '../services/search.service'; 
 
 // Configurable limits from .env
-const MAX_EMAILS_PER_HOUR = parseInt(process.env.MAX_EMAILS_PER_HOUR || '10', 10);
 const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS || '2000', 10);
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '5', 10);
 
 console.log(`MAX_EMAILS_PER_HOUR=${process.env.MAX_EMAILS_PER_HOUR ?? '<not set>'}`);
+console.log(`MAX_EMAILS_PER_HOUR_PER_SENDER=${process.env.MAX_EMAILS_PER_HOUR_PER_SENDER ?? '<not set>'}`);
 
 export const emailWorker = new Worker(
   'email-sending',
@@ -43,10 +43,14 @@ export const emailWorker = new Worker(
       // ==========================================
       // 2. RATE LIMITING CHECK
       // ==========================================
-      const rateLimitResult = await checkRateLimit(emailJob.senderId, MAX_EMAILS_PER_HOUR);
+      // Resolve the hourly limit for THIS sender (per-sender, falling back to
+      // a global default). The Redis counter is already keyed per sender, so
+      // each sender is rate-limited independently.
+      const maxEmailsPerHour = resolvePerSenderLimit(emailJob.sender.email);
+      const rateLimitResult = await checkRateLimit(emailJob.senderId, maxEmailsPerHour);
 
       if (!rateLimitResult.allowed && rateLimitResult.nextAvailableAt) {
-        console.log(`⚠️ Rate limit hit (${rateLimitResult.currentCount}/${MAX_EMAILS_PER_HOUR}). Rescheduling job to ${new Date(rateLimitResult.nextAvailableAt).toISOString()}`);
+        console.log(`⚠️ Rate limit hit (${rateLimitResult.currentCount}/${maxEmailsPerHour} for sender ${emailJob.sender.email}). Rescheduling job to ${new Date(rateLimitResult.nextAvailableAt).toISOString()}`);
         
         // Reschedule the job into the next hour window
         await job.moveToDelayed(rateLimitResult.nextAvailableAt);
@@ -56,7 +60,7 @@ export const emailWorker = new Worker(
           try {
             await sendSlackNotification(
               emailJob.user.id,
-              `🚨 *Rate Limit Hit*\nSender: ${emailJob.sender.email}\nLimit: ${MAX_EMAILS_PER_HOUR}/hr\nEmail to ${emailJob.recipientEmail} has been delayed to the next hour.`
+              `🚨 *Rate Limit Hit*\nSender: ${emailJob.sender.email}\nLimit: ${maxEmailsPerHour}/hr\nEmail to ${emailJob.recipientEmail} has been delayed to the next hour.`
             );
           } catch (notificationError) {
             console.error('⚠️ Rate-limit Slack notification failed:', notificationError);
@@ -73,12 +77,21 @@ export const emailWorker = new Worker(
 
       // 3. Send the email
       const transporter = getEtherealTransporter(emailJob.sender);
+
+      // Build nodemailer attachments from the stored JSON (base64-decoded).
+      const attachments: any[] = (emailJob.attachments as any[] | null)?.map((a: any) => ({
+        filename: a?.name,
+        contentType: a?.type || undefined,
+        content: a?.base64 ? Buffer.from(a.base64, 'base64') : undefined,
+      })) ?? [];
+
       const info = await transporter.sendMail({
         from: `"OutBox Scheduler" <${emailJob.sender.email}>`,
         to: emailJob.recipientEmail,
         subject: emailJob.subject,
         text: emailJob.body,
         html: `<p>${emailJob.body}</p>`,
+        ...(attachments.length > 0 ? { attachments } : {}),
       });
 
       console.log(`✅ Email sent to ${emailJob.recipientEmail}. Preview: ${nodemailer.getTestMessageUrl(info)}`);
@@ -134,4 +147,4 @@ emailWorker.on('failed', (job, err) => {
   console.error(`❌ Job ${job?.id} failed with error:`, err.message);
 });
 
-console.log(`🚀 Email Worker started (Concurrency: ${CONCURRENCY}, Min Delay: ${MIN_DELAY_MS}ms, Max/Hr: ${MAX_EMAILS_PER_HOUR})`);
+console.log(`🚀 Email Worker started (Concurrency: ${CONCURRENCY}, Min Delay: ${MIN_DELAY_MS}ms, Default Max/Hr: ${process.env.MAX_EMAILS_PER_HOUR ?? '200'}, Per-Sender Max/Hr: ${process.env.MAX_EMAILS_PER_HOUR_PER_SENDER ?? '<inherit>'})`);

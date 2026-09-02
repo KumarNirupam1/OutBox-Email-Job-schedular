@@ -19,11 +19,10 @@ function isValidSlackState(state: string): boolean {
 
   const userId = state.slice(0, separator);
   const signature = state.slice(separator + 1);
-  const expected = signSlackState(userId);
-  return signature.length === expected.length && crypto.timingSafeEqual(
-    Buffer.from(state),
-    Buffer.from(expected),
-  );
+  const expectedSignature = signSlackState(userId).slice(separator + 1);
+
+  return signature.length === expectedSignature.length &&
+    crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
 type SlackOAuthResponse = {

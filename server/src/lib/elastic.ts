@@ -48,6 +48,7 @@ export async function ensureEmailIndex() {
           status: { type: 'keyword' },
           scheduledAt: { type: 'date' },
           sentAt: { type: 'date' },
+          attachmentNames: { type: 'text', analyzer: 'standard' },
         },
       },
     });

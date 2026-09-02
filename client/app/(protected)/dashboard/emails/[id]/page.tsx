@@ -103,16 +103,18 @@ export default function EmailDetailPage() {
                 <div className="space-y-2">
                   {email.attachments.map((file) => (
                     <div
-                      key={`${file.name}-${file.size}`}
+                      key={file.name}
                       className="flex items-center gap-3 rounded-lg border bg-muted/30 p-2 hover:bg-muted/50"
                     >
                       <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate text-sm">
                         {file.name}
                       </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(1)} MB
-                      </span>
+                      {typeof file.size === "number" && (
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                      )}
                       {file.url && (
                         <a
                           href={file.url}

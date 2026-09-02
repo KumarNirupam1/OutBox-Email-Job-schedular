@@ -4,7 +4,7 @@ import { auth } from '../lib/auth';
 import { prisma } from '../lib/db';
 import { emailQueue } from '../lib/queue';
 import { indexEmailJob } from '../services/search.service';
-import { emailSchema } from '../validators/email.validator';
+import { emailSchema, validateAttachmentsSize } from '../validators/email.validator';
 
 const router = Router();
 
@@ -35,6 +35,11 @@ router.post('/schedule', async (req, res) => {
       return res.status(403).json({ error: 'Invalid sender' });
     }
 
+    // 4b. Reject oversized attachment payloads
+    if (!validateAttachmentsSize(validatedData.attachments)) {
+      return res.status(413).json({ error: 'Attachments exceed the size limit' });
+    }
+
     
     // 5. Create EmailJob in DB
     const emailJob = await prisma.emailJob.create({
@@ -46,6 +51,9 @@ router.post('/schedule', async (req, res) => {
         body: validatedData.body,
         scheduledAt: scheduledDate,
         status: 'PENDING',
+        attachments: validatedData.attachments && validatedData.attachments.length > 0
+          ? (validatedData.attachments as any)
+          : null,
       },
     });
 

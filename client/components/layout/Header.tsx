@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link as LinkIcon, RefreshCw, Filter } from "lucide-react";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
+import { useSession } from "@/features/auth/hooks/use-session";
 import { SearchBar } from "@/components/email/SearchBar";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +44,8 @@ export function Header() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const justConnected = searchParams.get("slack") === "connected";
+  const { data: session } = useSession();
+  const user = session?.user;
 
   const { data: slackStatus, isLoading } = useQuery({
     queryKey: ["slack-status"],
@@ -79,8 +83,25 @@ export function Header() {
 
   return (
     <header className="flex min-h-14 items-center justify-between gap-4 border-b bg-background px-4 py-3 text-foreground md:px-6">
-      {/* Left side - empty */}
-      <div className="w-32"></div>
+      {/* Left side - User */}
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+        {user && (
+          <>
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={user.image || ""} alt={user.name || "User"} />
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                {user.name?.[0] || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="hidden min-w-0 flex-col leading-tight sm:flex">
+              <span className="truncate text-sm font-medium">{user.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Center - Search with Filter and Refresh */}
       <div className="flex flex-1 items-center justify-center gap-2 max-w-2xl">

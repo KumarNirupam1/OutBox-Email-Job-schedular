@@ -18,8 +18,16 @@ export interface EmailJob {
 
 export interface EmailAttachment {
   name: string;
-  size: number;
+  type?: string;
+  size?: number;
   url?: string;
+}
+
+export interface EmailAttachmentPayload {
+  name: string;
+  type: string;
+  size: number;
+  base64: string;
 }
 
 export interface SchedulePayload {
@@ -30,4 +38,5 @@ export interface SchedulePayload {
   scheduledAt: string;
   delayBetween?: number;  
   hourlyLimit?: number;
+  attachments?: EmailAttachmentPayload[];
 }
