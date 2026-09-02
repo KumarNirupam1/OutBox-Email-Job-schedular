@@ -18,7 +18,7 @@ import {
     FieldSeparator,
 } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
-import { signIn } from "../lib/auth-client";
+import { clearAuthState, signIn } from "../lib/auth-client";
 import { authRoutes } from "../lib/auth-routes";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -56,17 +56,21 @@ export function LoginForm({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const callbackUrl =
-        searchParams.get("callbackUrl") ?? authRoutes.dashboard;
+    const resolvedCallbackUrl =
+        searchParams.get("callbackUrl") ??
+        (typeof window === "undefined"
+            ? authRoutes.dashboard
+            : `${window.location.origin}${authRoutes.dashboard}`);
 
     async function handleGoogleSignIn() {
         setIsLoading(true);
         setError(null);
+        clearAuthState();
 
         const { data, error } = await signIn.social({
             provider: "google",
-            callbackURL: callbackUrl,
-            newUserCallbackURL: callbackUrl,
+            callbackURL: resolvedCallbackUrl,
+            newUserCallbackURL: resolvedCallbackUrl,
         });
 
         if (error) {

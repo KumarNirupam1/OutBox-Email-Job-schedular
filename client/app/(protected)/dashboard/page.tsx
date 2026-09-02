@@ -1,12 +1,18 @@
-import { requireAuth } from "@/features/auth";
-// import { DashboardHome } from "@/features/workspaces/components/dashboard-home";
+"use client";
 
-export default async function DashboardPage() {
-    const session = await requireAuth();
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-    return (
-        <div>
-            Dashboard
-        </div>
-    );
+export default function DashboardPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/dashboard/scheduled");
+  }, [router]);
+
+  return (
+    <div className="flex h-full items-center justify-center text-gray-500">
+      Redirecting to Scheduled...
+    </div>
+  );
 }

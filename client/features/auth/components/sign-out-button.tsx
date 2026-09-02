@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { signOut } from "../lib/auth-client";
+import { clearAuthState, signOut } from "../lib/auth-client";
 import { authRoutes } from "../lib/auth-routes";
 
 export function SignOutButton() {
@@ -14,16 +14,16 @@ export function SignOutButton() {
     async function handleSignOut() {
         setIsLoading(true);
 
-        await signOut({
-            fetchOptions: {
-                onSuccess: () => {
-                    router.push(authRoutes.login);
-                    router.refresh();
-                },
-            },
-        });
-
-        setIsLoading(false);
+        try {
+            await signOut();
+        } catch {
+            // continue to cleanup even if the server signout request fails
+        } finally {
+            clearAuthState();
+            router.push(authRoutes.login);
+            router.refresh();
+            setIsLoading(false);
+        }
     }
 
     return (
