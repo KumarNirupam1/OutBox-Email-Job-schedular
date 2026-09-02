@@ -1,4 +1,3 @@
-// app/dashboard/sent/page.tsx
 "use client";
 
 import { useSentEmails } from "@/features/emails/hooks/useEmail";

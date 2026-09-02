@@ -13,6 +13,13 @@ export interface EmailJob {
   sentAt?: string | null;
   errorMessage?: string | null;
   sender: Sender;
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  name: string;
+  size: number;
+  url?: string;
 }
 
 export interface SchedulePayload {
@@ -21,4 +28,6 @@ export interface SchedulePayload {
   body: string;
   senderId: string;
   scheduledAt: string;
+  delayBetween?: number;  
+  hourlyLimit?: number;
 }

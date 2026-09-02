@@ -3,15 +3,12 @@
 import { ComposeForm } from "@/components/email/ComposeForm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function ComposePage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/scheduled">
-          <ArrowLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />
-        </Link>
-        <h2 className="text-2xl font-bold tracking-tight">Compose Campaign</h2>
       </div>
 
       <ComposeForm />

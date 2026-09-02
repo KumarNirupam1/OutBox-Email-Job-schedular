@@ -1,4 +1,3 @@
-// app/dashboard/scheduled/page.tsx
 "use client";
 
 import { useScheduledEmails } from "@/features/emails/hooks/useEmail";
