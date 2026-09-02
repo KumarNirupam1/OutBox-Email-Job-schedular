@@ -159,8 +159,8 @@ npm run dev        # http://localhost:3000
 | `BETTER_AUTH_SECRET` | Secret used by better-auth (also signs Slack OAuth state) |
 | `BETTER_AUTH_URL` | Trusted frontend origin for auth |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
-| `ELASTICSEARCH_URL` | Elasticsearch endpoint (leave unset to use the Postgres fallback) |
-| `ELASTICSEARCH_API_KEY` | (optional) ES API key, or `ELASTICSEARCH_USERNAME`/`ELASTICSEARCH_PASSWORD` |
+| `ELASTICSEARCH_URL` | Elasticsearch endpoint (required for the search requirement; if unset the Postgres search fallback is used) |
+| `ELASTICSEARCH_API_KEY` | ES API key, or `ELASTICSEARCH_USERNAME`/`ELASTICSEARCH_PASSWORD` |
 | `WORKER_CONCURRENCY` | Max parallel jobs the worker processes (default `5`) |
 | `MIN_DELAY_MS` | Minimum ms between individual sends, via the BullMQ limiter (default `2000`) |
 | `MAX_EMAILS_PER_HOUR` | Global default hourly limit (default `200`) |
