@@ -1,7 +1,8 @@
+// features/auth/components/LoginForm.tsx
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,11 +14,11 @@ import {
 } from "@/components/ui/card";
 import {
     Field,
-    FieldDescription,
     FieldGroup,
-    FieldSeparator,
 } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { clearAuthState, signIn } from "../lib/auth-client";
 import { authRoutes } from "../lib/auth-routes";
 
@@ -52,9 +53,13 @@ export function LoginForm({
     className,
     ...props
 }: React.ComponentProps<"div">) {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState(false);
+    const [isEmailLoading, setIsEmailLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
 
     const resolvedCallbackUrl =
         searchParams.get("callbackUrl") ??
@@ -87,16 +92,38 @@ export function LoginForm({
         setIsLoading(false);
     }
 
+    async function handleEmailSignIn(e: React.FormEvent) {
+        e.preventDefault();
+        setIsEmailLoading(true);
+        setError(null);
+        clearAuthState();
+
+        const { error: signInError } = await signIn.email({
+            email,
+            password,
+        });
+
+        if (signInError) {
+            setError(signInError.message ?? "Invalid email or password. Please try again.");
+            setIsEmailLoading(false);
+            return;
+        }
+
+        router.replace(authRoutes.dashboard);
+        router.refresh();
+    }
+
     return (
         <div className={cn("flex flex-col gap-6", className)} {...props}>
             <Card>
                 <CardHeader className="text-center">
-                    <CardTitle className="text-xl">Welcome back</CardTitle>
+                    <CardTitle className="text-2xl">Login</CardTitle>
                     <CardDescription>
-                        Sign in with Google to continue to Chaibook
+                        Sign in to your account to continue
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {/* Google Sign In */}
                     <form
                         onSubmit={(event) => {
                             event.preventDefault();
@@ -109,23 +136,69 @@ export function LoginForm({
                                     type="submit"
                                     variant="outline"
                                     className="w-full"
-                                    disabled={isLoading}
+                                    disabled={isLoading || isEmailLoading}
                                 >
                                     {isLoading ? (
                                         <Spinner />
                                     ) : (
                                         <GoogleIcon />
                                     )}
-                                    Continue with Google
+                                    Login with Google
                                 </Button>
-                                <FieldDescription className="text-center">
-                                    By continuing, you agree to our terms of
-                                    service and privacy policy.
-                                </FieldDescription>
                             </Field>
-                            <FieldSeparator>Secure sign-in</FieldSeparator>
+                        </FieldGroup>
+                    </form>
+
+                    {/* Divider */}
+                    <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="px-2 text-muted-foreground">
+                                or sign in through email
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Email Sign In */}
+                    <form onSubmit={handleEmailSignIn}>
+                        <FieldGroup>
+                            <Field>
+                                <Label htmlFor="email">Email ID</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="Enter your email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    disabled={isLoading || isEmailLoading}
+                                    className="mt-1.5"
+                                />
+                            </Field>
+                            <Field>
+                                <Label htmlFor="password">Password</Label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    placeholder="Enter your password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    disabled={isLoading || isEmailLoading}
+                                    className="mt-1.5"
+                                />
+                            </Field>
+                            <Button
+                                type="submit"
+                                className="w-full"
+                                disabled={isLoading || isEmailLoading}
+                            >
+                                {isEmailLoading ? <Spinner /> : "Login"}
+                            </Button>
                             {error ? (
-                                <p className="text-center text-sm text-destructive">
+                                <p className="text-center text-sm text-destructive mt-2">
                                     {error}
                                 </p>
                             ) : null}
