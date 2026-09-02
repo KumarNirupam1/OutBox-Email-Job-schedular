@@ -31,10 +31,21 @@ export async function indexEmailJob(emailJob: any) {
 }
 
 // Search emails in Elasticsearch
-export async function searchEmails(userId: string, query: string) {
+export async function searchEmails(userId: string, query: string, statuses?: string[]) {
+  // Build the status filter for reuse across ES and Postgres paths.
+  const statusTerms =
+    statuses && statuses.length > 0
+      ? statuses.map((value) => ({ term: { status: value } }))
+      : undefined;
+
   try {
     if (!esClient) {
       throw new Error('Elasticsearch is not configured');
+    }
+
+    const filter: any[] = [{ term: { userId } }];
+    if (statusTerms) {
+      filter.push({ bool: { should: statusTerms, minimum_should_match: 1 } });
     }
 
     const response = await esClient.search({
@@ -49,19 +60,35 @@ export async function searchEmails(userId: string, query: string) {
               },
             },
           ],
-          filter: [{ term: { userId } }],
+          filter,
         },
       },
       sort: [{ scheduledAt: 'desc' }],
       size: 50,
     });
 
-    return response.hits.hits.flatMap((hit) =>
-      hit._source ? [hit._source] : [],
+    const sourceIds = response.hits.hits.flatMap((hit) =>
+      hit._source && hit._source.id ? [hit._source.id] : [],
     );
+
+    // Return nothing if ES matched no documents.
+    if (sourceIds.length === 0) {
+      return [];
+    }
+
+    // Fetch the full records (with sender) from Postgres so the response
+    // shape matches what the rest of the app expects.
+    return await prisma.emailJob.findMany({
+      where: {
+        userId,
+        id: { in: sourceIds },
+        ...(statusTerms && { status: { in: statuses } }),
+      },
+      include: { sender: true },
+    });
   } catch (error) {
     console.error('❌ Elasticsearch search failed, falling back to Postgres:', error);
-    
+
     // SENIOR MOVE: Fallback to Postgres if ES is down!
     return await prisma.emailJob.findMany({
       where: {
@@ -71,7 +98,9 @@ export async function searchEmails(userId: string, query: string) {
           { subject: { contains: query, mode: 'insensitive' } },
           { body: { contains: query, mode: 'insensitive' } },
         ],
+        ...(statuses && statuses.length > 0 && { status: { in: statuses } }),
       },
+      include: { sender: true },
       orderBy: { scheduledAt: 'desc' },
       take: 50,
     });

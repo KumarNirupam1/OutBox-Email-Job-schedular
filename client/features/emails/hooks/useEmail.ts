@@ -37,3 +37,40 @@ export function useEmail(id: string) {
     enabled: Boolean(id),
   });
 }
+
+export function useSearchEmails(query: string, status?: string) {
+  const trimmed = query.trim();
+
+  return useQuery({
+    queryKey: ["emails", "search", trimmed, status],
+    queryFn: () => emailApi.search(trimmed, status),
+    enabled: trimmed.length > 0,
+    staleTime: 10_000,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSenders() {
+  return useQuery({
+    queryKey: ["senders"],
+    queryFn: emailApi.getSenders,
+    staleTime: 30_000,
+  });
+}
+
+export function useEnsureSender() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => emailApi.ensureSender(),
+    onSuccess: (sender) => {
+      queryClient.setQueryData(["senders"], (current: unknown) => {
+        if (Array.isArray(current)) {
+          const alreadyPresent = current.some((s) => s.id === sender.id);
+          return alreadyPresent ? current : [...current, sender];
+        }
+        return [sender];
+      });
+    },
+  });
+}

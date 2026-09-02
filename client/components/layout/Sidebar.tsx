@@ -44,7 +44,7 @@ export function Sidebar() {
     <aside className="flex min-h-screen w-56 shrink-0 flex-col border-r bg-sidebar p-4 text-sidebar-foreground">
       {/* Logo */}
       <div className="mb-6 px-2">
-        <h1 className="text-2xl font-bold tracking-tighter text-primary">ONB</h1>
+        <h1 className="text-2xl font-bold tracking-tighter text-primary">OutBox</h1>
       </div>
 
       {/* User Profile */}

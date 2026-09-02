@@ -9,6 +9,7 @@ import { ensureEmailIndex } from './lib/elastic';
 import slackRoutes from './routes/slack.routes';
 import emailRoutes from './routes/email.routes';
 import searchRoutes from './routes/search.routes';
+import senderRoutes from './routes/sender.routes';
 
 
 import { emailWorker } from './workers/email.worker';
@@ -44,8 +45,11 @@ app.all('/api/auth/{*path}', toNodeHandler(auth));
 
 // App routes
 app.use('/api/slack', slackRoutes);
-app.use('/api/emails', emailRoutes);
+app.use('/api/senders', senderRoutes);
+// NOTE: searchRoutes must be registered BEFORE emailRoutes. Otherwise the
+// GET /api/emails/:id catch-all in emailRoutes would swallow /api/emails/search.
 app.use('/api/emails', searchRoutes);
+app.use('/api/emails', emailRoutes);
 
 // Bull Board Dashboard (Live Queue Visibility)
 const serverAdapter = new ExpressAdapter();

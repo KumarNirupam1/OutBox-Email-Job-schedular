@@ -1,13 +1,23 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Link as LinkIcon, RefreshCw, Filter } from "lucide-react";
-import { SignOutButton } from "@/features/auth/components/sign-out-button";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Link as LinkIcon, RefreshCw, Filter } from "lucide-react";
+import { SignOutButton } from "@/features/auth/components/sign-out-button";
+import { SearchBar } from "@/components/email/SearchBar";
+import { cn } from "@/lib/utils";
+
+function getListQueryKeys(pathname: string): string[][] {
+  if (pathname === "/dashboard/sent") {
+    return [["emails", "sent"]];
+  }
+  if (pathname === "/dashboard" || pathname === "/dashboard/scheduled") {
+    return [["emails", "scheduled"]];
+  }
+  return [];
+}
 
 async function getSlackStatus() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -28,11 +38,12 @@ async function getSlackStatus() {
 
 export function Header() {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const justConnected = searchParams.get("slack") === "connected";
 
-  const { data: slackStatus, isLoading, refetch } = useQuery({
+  const { data: slackStatus, isLoading } = useQuery({
     queryKey: ["slack-status"],
     queryFn: getSlackStatus,
     retry: false,
@@ -46,10 +57,24 @@ export function Header() {
     window.open(`${backendUrl}/api/slack/connect`, "_self");
   };
 
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["emails", "scheduled"] });
-    queryClient.invalidateQueries({ queryKey: ["emails", "sent"] });
-    refetch();
+  const handleRefresh = async () => {
+    const queryKeys = getListQueryKeys(pathname);
+
+    if (queryKeys.length === 0) return;
+
+    setIsRefreshing(true);
+    try {
+      await Promise.all(
+        queryKeys.map((key) =>
+          queryClient.invalidateQueries({
+            queryKey: key,
+            refetchType: "active",
+          }),
+        ),
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
@@ -59,24 +84,20 @@ export function Header() {
 
       {/* Center - Search with Filter and Refresh */}
       <div className="flex flex-1 items-center justify-center gap-2 max-w-2xl">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search emails..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-full rounded-full border-gray-200 bg-muted/50 pl-9 pr-4 text-sm focus:bg-background focus-visible:ring-1 focus-visible:ring-primary"
-          />
-        </div>
+        <SearchBar />
         <div className="flex items-center gap-1 rounded-full bg-muted/50 p-0.5">
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             onClick={handleRefresh}
+            disabled={isRefreshing}
             title="Refresh"
+            aria-label="Refresh"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw
+              className={cn("h-4 w-4", isRefreshing && "animate-spin")}
+            />
           </Button>
           <Button
             variant="ghost"

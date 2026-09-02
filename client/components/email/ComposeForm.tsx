@@ -8,7 +8,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
-import { useScheduleEmail } from "@/features/emails/hooks/useEmail"; 
+import { useScheduleEmail, useSenders, useEnsureSender } from "@/features/emails/hooks/useEmail"; 
 import { authClient } from "@/features/auth/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,8 @@ interface ComposeUser {
 export function ComposeForm() {
   const router = useRouter();
   const scheduleEmail = useScheduleEmail();
+  const { data: senders } = useSenders();
+  const ensureSender = useEnsureSender();
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -73,6 +75,14 @@ export function ComposeForm() {
     });
   }, []);
 
+  // Auto-create a sender for the user if they don't have one yet, so
+  // scheduling has a valid senderId.
+  useEffect(() => {
+    if (Array.isArray(senders) && senders.length === 0 && !ensureSender.isPending) {
+      void ensureSender.mutate();
+    }
+  }, [senders, ensureSender]);
+
   // --- Recipient Logic ---
   const addRecipients = (value: string) => {
     if (!value.trim()) return;
@@ -94,7 +104,7 @@ export function ComposeForm() {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    Papa.parse<string[]>(file, {
+    Papa.parse<string>(file, {
       skipEmptyLines: true,
       complete: (results) => {
         const emails: string[] = [];
@@ -155,6 +165,12 @@ export function ComposeForm() {
       return;
     }
 
+    const sender = senders?.[0];
+    if (!sender?.id) {
+      alert("No sender configured yet. Please try again in a moment.");
+      return;
+    }
+
     if (!startTime) {
       alert("Please select a start time using the clock icon.");
       return;
@@ -162,7 +178,10 @@ export function ComposeForm() {
 
     setIsSubmitting(true);
     const baseTime = new Date(startTime).getTime();
-    
+    const delayMs = delayMinutes * 60000;
+    const limitDelayMs = hourlyLimit > 0 ? 3600000 / hourlyLimit : 0;
+    const stepMs = Math.max(delayMs, limitDelayMs);
+
     try {
       let successCount = 0;
       for (let index = 0; index < pending.length; index += 1) {
@@ -170,8 +189,8 @@ export function ComposeForm() {
           recipientEmail: pending[index],
           subject: subject.trim(),
           body,
-          senderId: user?.id || "",
-          scheduledAt: new Date(baseTime + index * delayMinutes * 60000).toISOString(),
+          senderId: sender.id,
+          scheduledAt: new Date(baseTime + index * stepMs).toISOString(),
         });
         successCount += 1;
       }
@@ -196,7 +215,7 @@ export function ComposeForm() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <span className="text-xl font-semibold">Compose New Email</span>
+          <span className="text-xl ">Compose New Email</span>
         </div>
         <div className="flex items-center gap-1">
           <input ref={attachmentInputRef} type="file" multiple className="hidden" onChange={handleAttachmentUpload} />
@@ -204,11 +223,20 @@ export function ComposeForm() {
             <Paperclip className="h-4 w-4" />
           </Button>
           <Popover open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Send later" title="Send later">
-                <Clock className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Send later"
+                  title="Send later"
+                >
+                  <Clock className="h-4 w-4" />
+                </Button>
+              }
+            />
             <PopoverContent align="end" className="w-64">
               <p className="text-sm font-medium">Send Later</p>
               <p className="text-xs text-muted-foreground mb-2">Pick date & time</p>
@@ -238,7 +266,7 @@ export function ComposeForm() {
           
           {/* From */}
           <span className="py-3 text-muted-foreground font-medium">From</span>
-          <Input value={user?.email || ""} readOnly placeholder="Loading..." className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 text-sm" />
+          <Input value={senders?.[0]?.email || user?.email || ""} readOnly placeholder="Loading..." className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 text-sm" />
           
           {/* To */}
           <span className="py-3 text-muted-foreground font-medium">To</span>
