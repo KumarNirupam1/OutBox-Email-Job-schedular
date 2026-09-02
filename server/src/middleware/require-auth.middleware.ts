@@ -15,15 +15,19 @@ export async function requireAuth(
     res: Response,
     next: NextFunction,
 ): Promise<void> {
-    const session = await auth.api.getSession({
-        headers: fromNodeHeaders(req.headers),
-    });
+    try {
+        const session = await auth.api.getSession({
+            headers: fromNodeHeaders(req.headers),
+        });
 
-    if (!session?.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
+        if (!session?.user) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+
+        req.session = session;
+        next();
+    } catch (error) {
+        next(error);
     }
-
-    req.session = session;
-    next();
 }

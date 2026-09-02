@@ -9,6 +9,7 @@ import { prisma } from '../lib/db';
 import { getEtherealTransporter } from '../utils/ethereal';
 import { sendSlackNotification } from '../utils/slack';
 import { checkRateLimit } from '../utils/rateLimiter';
+import { indexEmailJob } from '../services/search.service'; 
 
 // Configurable limits from .env
 const MAX_EMAILS_PER_HOUR = parseInt(process.env.MAX_EMAILS_PER_HOUR || '10', 10);
@@ -82,14 +83,17 @@ export const emailWorker = new Worker(
 
       console.log(`✅ Email sent to ${emailJob.recipientEmail}. Preview: ${nodemailer.getTestMessageUrl(info)}`);
 
-      // 4. Update DB status to SENT
-      await prisma.emailJob.update({
+       // 4. Update DB status to SENT
+      const updatedJob = await prisma.emailJob.update({
         where: { id: emailJobId },
         data: {
           status: 'SENT',
           sentAt: new Date(),
         },
       });
+
+      // Update Elasticsearch with new status
+      await indexEmailJob(updatedJob);
 
     } catch (error: any) {
       if (error instanceof DelayedError) {
@@ -99,13 +103,14 @@ export const emailWorker = new Worker(
       console.error(`❌ Failed to process job ${emailJobId}:`, error.message);
       
       // Only mark as FAILED in DB if it's a real error (not a rate limit delay)
-      await prisma.emailJob.update({
+      const failedJob = await prisma.emailJob.update({
         where: { id: emailJobId },
         data: {
           status: 'FAILED',
           errorMessage: error.message,
         },
       });
+      await indexEmailJob(failedJob);
       
       // Re-throw to let BullMQ know it failed so it can retry based on its own retry config
       throw error;

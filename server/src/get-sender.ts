@@ -21,11 +21,12 @@ function getMaskedDatabaseUrl(): string {
 }
 
 async function getSender() {
-  let prisma: Awaited<typeof import('./lib/db')>['prisma'] | undefined;
+  let disconnect: (() => Promise<void>) | undefined;
 
   try {
     console.log('DATABASE_URL:', getMaskedDatabaseUrl());
-    ({ prisma } = await import('./lib/db'));
+    const { prisma } = await import('./lib/db.js');
+    disconnect = () => prisma.$disconnect();
 
     const sender = await prisma.sender.findFirst();
     if (sender) {
@@ -38,7 +39,7 @@ async function getSender() {
     console.error('❌ Failed to retrieve sender:', error);
     process.exitCode = 1;
   } finally {
-    await prisma?.$disconnect();
+    await disconnect?.();
   }
 }
 

@@ -3,18 +3,12 @@ import { z } from 'zod';
 import { auth } from '../lib/auth';
 import { prisma } from '../lib/db';
 import { emailQueue } from '../lib/queue';
+import { indexEmailJob } from '../services/search.service';
+import { emailSchema } from '../validators/email.validator';
 
 const router = Router();
 
 // Relaxed validation schema for better compatibility
-const scheduleSchema = z.object({
-  recipientEmail: z.string().email(),
-  subject: z.string().min(1),
-  body: z.string().min(1),
-  senderId: z.string().min(1),
-  scheduledAt: z.string(), // We will parse this as a Date manually
-});
-
 // POST /api/emails/schedule
 router.post('/schedule', async (req, res) => {
   try {
@@ -25,7 +19,7 @@ router.post('/schedule', async (req, res) => {
     }
 
     // 2. Validate payload
-    const validatedData = scheduleSchema.parse(req.body);
+    const validatedData = emailSchema.parse(req.body);
 
     // 3. Verify date is valid
     const scheduledDate = new Date(validatedData.scheduledAt);
@@ -41,6 +35,7 @@ router.post('/schedule', async (req, res) => {
       return res.status(403).json({ error: 'Invalid sender' });
     }
 
+    
     // 5. Create EmailJob in DB
     const emailJob = await prisma.emailJob.create({
       data: {
@@ -54,19 +49,28 @@ router.post('/schedule', async (req, res) => {
       },
     });
 
+    //Index in Elasticsearch immediately
+    await indexEmailJob(emailJob);
+
     // 6. Calculate delay in milliseconds
     const delayMs = Math.max(0, scheduledDate.getTime() - Date.now());
 
-    // 7. Add to BullMQ Queue
-    await emailQueue.add('send-email', 
-      { emailJobId: emailJob.id },
-      { 
-        jobId: emailJob.id, 
-        delay: delayMs,
-        removeOnComplete: true,
-        removeOnFail: false,
-      }
-    );
+    // 7. Add to BullMQ Queue. The DB row is removed if enqueueing fails so
+    // an accepted PENDING row cannot become an orphan with no worker job.
+    try {
+      await emailQueue.add('send-email',
+        { emailJobId: emailJob.id },
+        {
+          jobId: emailJob.id,
+          delay: delayMs,
+          removeOnComplete: true,
+          removeOnFail: false,
+        }
+      );
+    } catch (queueError) {
+      await prisma.emailJob.delete({ where: { id: emailJob.id } });
+      throw queueError;
+    }
 
     console.log(`✅ Scheduled email job ${emailJob.id} with ${delayMs}ms delay`);
 
@@ -82,6 +86,49 @@ router.post('/schedule', async (req, res) => {
     }
     console.error('❌ Schedule error:', error);
     res.status(500).json({ error: 'Failed to schedule email' });
+  }
+});
+
+router.get('/scheduled', async (req, res) => {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const jobs = await prisma.emailJob.findMany({
+      where: { userId: session.user.id, status: 'PENDING' },
+      include: { sender: true },
+      orderBy: { scheduledAt: 'asc' },
+    });
+
+    return res.json(jobs);
+  } catch (error) {
+    console.error('❌ Scheduled emails error:', error);
+    return res.status(500).json({ error: 'Failed to fetch scheduled emails' });
+  }
+});
+
+router.get('/sent', async (req, res) => {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const jobs = await prisma.emailJob.findMany({
+      where: {
+        userId: session.user.id,
+        status: { in: ['SENT', 'FAILED'] },
+      },
+      include: { sender: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return res.json(jobs);
+  } catch (error) {
+    console.error('❌ Sent emails error:', error);
+    return res.status(500).json({ error: 'Failed to fetch sent emails' });
   }
 });
 

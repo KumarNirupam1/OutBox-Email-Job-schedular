@@ -3,10 +3,12 @@ import express from "express";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from './lib/auth';
 import cors from "cors";
+import { ensureEmailIndex } from './lib/elastic';
 
 
 import slackRoutes from './routes/slack.routes';
 import emailRoutes from './routes/email.routes';
+import searchRoutes from './routes/search.routes';
 
 
 import { emailWorker } from './workers/email.worker';
@@ -43,6 +45,7 @@ app.all('/api/auth/{*path}', toNodeHandler(auth));
 // App routes
 app.use('/api/slack', slackRoutes);
 app.use('/api/emails', emailRoutes);
+app.use('/api/emails', searchRoutes);
 
 // Bull Board Dashboard (Live Queue Visibility)
 const serverAdapter = new ExpressAdapter();
@@ -63,8 +66,18 @@ app.get('/api/health', (_req, res) => {
 app.get('/', (_req, res) => {
   res.json({ message: "OutBox Email Scheduler API is running" });
 });
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
-  console.log(`📊 Bull Board Dashboard: http://localhost:${port}/admin/queues`);
-  console.log(`🔗 Frontend URL allowed: ${frontendUrl}`);
-});
+async function startServer() {
+  try {
+    await ensureEmailIndex();
+  } catch (error) {
+    console.error('⚠️ Elasticsearch startup check failed. Continuing with Postgres search fallback:', error);
+  }
+
+  app.listen(port, () => {
+    console.log(`🚀 Server running on http://localhost:${port}`);
+    console.log(`📊 Bull Board Dashboard: http://localhost:${port}/admin/queues`);
+    console.log(`🔗 Frontend URL allowed: ${frontendUrl}`);
+  });
+}
+
+void startServer();

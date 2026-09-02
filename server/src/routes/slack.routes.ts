@@ -1,8 +1,30 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { auth } from '../lib/auth';
 import { prisma } from '../lib/db.js';
 
 const router = Router();
+
+function signSlackState(userId: string): string {
+  const signature = crypto
+    .createHmac('sha256', process.env.BETTER_AUTH_SECRET ?? '')
+    .update(userId)
+    .digest('hex');
+  return `${userId}.${signature}`;
+}
+
+function isValidSlackState(state: string): boolean {
+  const separator = state.lastIndexOf('.');
+  if (separator < 1) return false;
+
+  const userId = state.slice(0, separator);
+  const signature = state.slice(separator + 1);
+  const expected = signSlackState(userId);
+  return signature.length === expected.length && crypto.timingSafeEqual(
+    Buffer.from(state),
+    Buffer.from(expected),
+  );
+}
 
 type SlackOAuthResponse = {
   ok: boolean;
@@ -27,10 +49,14 @@ router.get('/connect', async (req, res) => {
 
     // Redirect to Slack OAuth
     const slackClientId = process.env.SLACK_CLIENT_ID;
-    const redirectUri = encodeURIComponent(`${process.env.BACKEND_URL}/api/slack/callback`);
+    if (!slackClientId || !process.env.SLACK_CLIENT_SECRET) {
+      return res.status(503).json({ error: 'Slack OAuth is not configured' });
+    }
+
+    const redirectUri = encodeURIComponent(`${process.env.BACKEND_URL ?? 'http://localhost:8080'}/api/slack/callback`);
     const scopes = 'incoming-webhook';
     
-    const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${slackClientId}&scope=${scopes}&redirect_uri=${redirectUri}&state=${session.user.id}`;
+    const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${encodeURIComponent(slackClientId)}&scope=${scopes}&redirect_uri=${redirectUri}&state=${encodeURIComponent(signSlackState(session.user.id))}`;
     
     res.redirect(slackAuthUrl);
   } catch (error) {
@@ -48,9 +74,13 @@ router.get('/callback', async (req, res) => {
       return res.status(400).json({ error: 'Missing code or state' });
     }
 
-    // Verify state matches user ID (basic CSRF protection)
+    if (typeof state !== 'string' || !isValidSlackState(state)) {
+      return res.status(401).json({ error: 'Invalid state parameter' });
+    }
+
+    const stateUserId = state.slice(0, state.lastIndexOf('.'));
     const session = await auth.api.getSession({ headers: req.headers });
-    if (!session?.user || session.user.id !== state) {
+    if (!session?.user || session.user.id !== stateUserId) {
       return res.status(401).json({ error: 'Invalid state parameter' });
     }
 
@@ -76,14 +106,14 @@ router.get('/callback', async (req, res) => {
     await prisma.slackIntegration.upsert({
       where: { userId: session.user.id },
       update: {
-        webhookUrl: data.incoming_webhook.url,
-        channelName: data.incoming_webhook.channel,
+        webhookUrl: data.incoming_webhook?.url,
+        channelName: data.incoming_webhook?.channel,
         teamName: data.team?.name,
       },
       create: {
         userId: session.user.id,
-        webhookUrl: data.incoming_webhook.url,
-        channelName: data.incoming_webhook.channel,
+        webhookUrl: data.incoming_webhook?.url,
+        channelName: data.incoming_webhook?.channel,
         teamName: data.team?.name,
       },
     });

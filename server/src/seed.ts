@@ -2,9 +2,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let prisma: Awaited<typeof import('./lib/db')>['prisma'];
-let createEtherealAccount: typeof import('./utils/ethereal')['createEtherealAccount'];
-
 function getMaskedDatabaseUrl(): string {
   const databaseUrl = process.env.DATABASE_URL;
 
@@ -23,7 +20,10 @@ function getMaskedDatabaseUrl(): string {
   }
 }
 
-async function seed() {
+type Prisma = Awaited<typeof import('./lib/db.js')>['prisma'];
+type CreateEtherealAccount = typeof import('./utils/ethereal.js')['createEtherealAccount'];
+
+async function seed(prisma: Prisma, createEtherealAccount: CreateEtherealAccount) {
   console.log('🌱 Seeding database...');
   console.log('DATABASE_URL:', getMaskedDatabaseUrl());
   
@@ -61,18 +61,19 @@ async function seed() {
 
 async function main() {
   let exitCode = 0;
+  let prisma: Prisma | undefined;
 
   try {
-    ({ prisma } = await import('./lib/db'));
-    ({ createEtherealAccount } = await import('./utils/ethereal'));
+    ({ prisma } = await import('./lib/db.js'));
+    const { createEtherealAccount } = await import('./utils/ethereal.js');
 
     // Run `npx prisma generate` after schema changes and before running this script.
-    await seed();
+    await seed(prisma, createEtherealAccount);
   } catch (error) {
     console.error('❌ Database seed failed:', error);
     exitCode = 1;
   } finally {
-    await prisma.$disconnect();
+    await prisma?.$disconnect();
   }
 
   process.exit(exitCode);
