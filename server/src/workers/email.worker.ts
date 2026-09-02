@@ -1,20 +1,33 @@
-import { Worker, Job } from 'bullmq';
-import { redisConnection } from '../lib/redis.js';
-import { prisma } from '../lib/db.js';
-import { getEtherealTransporter } from '../utils/ethereal.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+import { DelayedError, Job, Worker } from 'bullmq';
+import nodemailer from 'nodemailer';
+import { redisConnection } from '../lib/redis';
+import { prisma } from '../lib/db';
+import { getEtherealTransporter } from '../utils/ethereal';
+import { sendSlackNotification } from '../utils/slack';
+import { checkRateLimit } from '../utils/rateLimiter';
+
+// Configurable limits from .env
+const MAX_EMAILS_PER_HOUR = parseInt(process.env.MAX_EMAILS_PER_HOUR || '10', 10);
+const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS || '2000', 10);
+const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '5', 10);
+
+console.log(`MAX_EMAILS_PER_HOUR=${process.env.MAX_EMAILS_PER_HOUR ?? '<not set>'}`);
 
 export const emailWorker = new Worker(
   'email-sending',
   async (job: Job) => {
     const { emailJobId } = job.data;
-
     console.log(`📧 Processing job ${job.id} for EmailJob ${emailJobId}`);
 
     try {
-      // 1. Fetch the job details and sender info from DB
+      // 1. Fetch job details, sender, AND user (for Slack lookup)
       const emailJob = await prisma.emailJob.findUnique({
         where: { id: emailJobId },
-        include: { sender: true },
+        include: { sender: true, user: true },
       });
 
       if (!emailJob) {
@@ -26,10 +39,39 @@ export const emailWorker = new Worker(
         return;
       }
 
-      // 2. Create Nodemailer transporter
-      const transporter = getEtherealTransporter(emailJob.sender);
+      // ==========================================
+      // 2. RATE LIMITING CHECK
+      // ==========================================
+      const rateLimitResult = await checkRateLimit(emailJob.senderId, MAX_EMAILS_PER_HOUR);
+
+      if (!rateLimitResult.allowed && rateLimitResult.nextAvailableAt) {
+        console.log(`⚠️ Rate limit hit (${rateLimitResult.currentCount}/${MAX_EMAILS_PER_HOUR}). Rescheduling job to ${new Date(rateLimitResult.nextAvailableAt).toISOString()}`);
+        
+        // Reschedule the job into the next hour window
+        await job.moveToDelayed(rateLimitResult.nextAvailableAt);
+
+        // Notification failure must not turn an already-delayed job into a failed job.
+        if (emailJob.user) {
+          try {
+            await sendSlackNotification(
+              emailJob.user.id,
+              `🚨 *Rate Limit Hit*\nSender: ${emailJob.sender.email}\nLimit: ${MAX_EMAILS_PER_HOUR}/hr\nEmail to ${emailJob.recipientEmail} has been delayed to the next hour.`
+            );
+          } catch (notificationError) {
+            console.error('⚠️ Rate-limit Slack notification failed:', notificationError);
+          }
+        }
+
+        // BullMQ requires this signal after moveToDelayed() so it does not
+        // attempt to complete the job that is already in the delayed set.
+        throw new DelayedError();
+      }
+      // ==========================================
+      // END RATE LIMITING LOGIC
+      // ==========================================
 
       // 3. Send the email
+      const transporter = getEtherealTransporter(emailJob.sender);
       const info = await transporter.sendMail({
         from: `"OutBox Scheduler" <${emailJob.sender.email}>`,
         to: emailJob.recipientEmail,
@@ -50,9 +92,13 @@ export const emailWorker = new Worker(
       });
 
     } catch (error: any) {
-      console.error(`❌ Failed to send email for job ${emailJobId}:`, error.message);
+      if (error instanceof DelayedError) {
+        throw error;
+      }
+
+      console.error(`❌ Failed to process job ${emailJobId}:`, error.message);
       
-      // Update DB status to FAILED
+      // Only mark as FAILED in DB if it's a real error (not a rate limit delay)
       await prisma.emailJob.update({
         where: { id: emailJobId },
         data: {
@@ -61,13 +107,17 @@ export const emailWorker = new Worker(
         },
       });
       
-      // Re-throw to let BullMQ know the job failed (it will retry based on config)
+      // Re-throw to let BullMQ know it failed so it can retry based on its own retry config
       throw error;
     }
   },
   {
     connection: redisConnection,
-    concurrency: 5, // Configurable concurrency (Phase 4 will make this dynamic)
+    concurrency: CONCURRENCY,
+    limiter: {
+      max: 1,
+      duration: MIN_DELAY_MS, // Minimum delay between individual sends
+    },
   }
 );
 
@@ -79,4 +129,4 @@ emailWorker.on('failed', (job, err) => {
   console.error(`❌ Job ${job?.id} failed with error:`, err.message);
 });
 
-console.log('🚀 Email Worker started and listening for jobs...');
+console.log(`🚀 Email Worker started (Concurrency: ${CONCURRENCY}, Min Delay: ${MIN_DELAY_MS}ms, Max/Hr: ${MAX_EMAILS_PER_HOUR})`);

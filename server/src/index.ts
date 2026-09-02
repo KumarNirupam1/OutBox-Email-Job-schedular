@@ -12,6 +12,9 @@ import emailRoutes from './routes/email.routes';
 import { emailWorker } from './workers/email.worker';
 import { emailQueue } from './lib/queue';
 
+// Keep the worker module active when this entrypoint is bundled or transpiled.
+void emailWorker;
+
 
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
