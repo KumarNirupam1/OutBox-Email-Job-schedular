@@ -1,6 +1,10 @@
 # OutBox — Email Job Scheduler
 
 A **production-grade email scheduling service + dashboard** that accepts email send requests via an API, schedules them for a specific time using **BullMQ + Redis as a persistent job scheduler** (no cron), sends them through **Ethereal fake SMTP**, survives server restarts without losing jobs, and exposes a full **Next.js dashboard** to schedule, view, and search emails.
+<img width="1912" height="871" alt="image" src="https://github.com/user-attachments/assets/db2e6787-9c9b-4be5-be01-902a09203a1a" />
+<img width="1896" height="903" alt="Screenshot 2026-09-03 095937" src="https://github.com/user-attachments/assets/595cdfa5-5551-4378-859f-9e9a6be17b04" />
+
+
 
 Built as an intern assignment for ReachInbox, mapped line-by-line to the requirements (see the [Requirement checklist](#requirement-checklist)).
 
