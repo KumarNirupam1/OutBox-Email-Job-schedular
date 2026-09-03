@@ -10,6 +10,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import { useScheduleEmail, useSenders, useEnsureSender } from "@/features/emails/hooks/useEmail"; 
 import { authClient } from "@/features/auth/lib/auth-client";
+import { toastError, toastSuccess, toastWarning } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -145,7 +146,7 @@ export function ComposeForm() {
       },
       error: (error) => {
         console.error("CSV parsing error:", error);
-        alert("Failed to parse CSV file.");
+        toastError("Failed to parse CSV file.");
       },
     });
   };
@@ -174,18 +175,18 @@ export function ComposeForm() {
       : recipients;
 
     if (!pending.length || !subject.trim() || !editor?.getText().trim()) {
-      alert("Please add recipients, a subject, and email content.");
+      toastError("Please add recipients, a subject, and email content.");
       return;
     }
 
     const sender = senders?.[0];
     if (!sender?.id) {
-      alert("No sender configured yet. Please try again in a moment.");
+      toastWarning("No sender configured yet. Please try again in a moment.");
       return;
     }
 
     if (!startTime) {
-      alert("Please select a start time using the clock icon.");
+      toastWarning("Please select a start time using the clock icon.");
       return;
     }
 
@@ -205,7 +206,7 @@ export function ComposeForm() {
         ),
       );
     } catch {
-      alert("Failed to read one or more attachments.");
+      toastError("Failed to read one or more attachments.");
       setIsSubmitting(false);
       return;
     }
@@ -229,11 +230,13 @@ export function ComposeForm() {
         successCount += 1;
       }
       
-      alert(`Successfully scheduled ${successCount} email${successCount !== 1 ? "s" : ""}!`);
+      toastSuccess(
+        `Successfully scheduled ${successCount} email${successCount !== 1 ? "s" : ""}!`,
+      );
       router.push("/dashboard/scheduled");
     } catch (error) {
       console.error(error);
-      alert("Failed to schedule emails. Please try again.");
+      toastError("Failed to schedule emails. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

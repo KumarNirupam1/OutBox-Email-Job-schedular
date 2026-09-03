@@ -217,6 +217,29 @@ function Toaster({
 const createToastManager = ToastPrimitive.createToastManager
 const useToastManager = ToastPrimitive.useToastManager
 
+type ToastType = "success" | "info" | "warning" | "error" | "loading"
+
+function showToast(
+  type: ToastType,
+  title: React.ReactNode,
+  description?: React.ReactNode,
+  options?: { timeout?: number },
+) {
+  return toast.add({ title, description, type, timeout: options?.timeout })
+}
+
+const toastSuccess = (title: React.ReactNode, description?: React.ReactNode) =>
+  showToast("success", title, description)
+
+const toastError = (title: React.ReactNode, description?: React.ReactNode) =>
+  showToast("error", title, description)
+
+const toastWarning = (title: React.ReactNode, description?: React.ReactNode) =>
+  showToast("warning", title, description)
+
+const toastInfo = (title: React.ReactNode, description?: React.ReactNode) =>
+  showToast("info", title, description)
+
 export {
   Toaster,
   Toast,
@@ -231,4 +254,9 @@ export {
   createToastManager,
   toast,
   useToastManager,
+  showToast,
+  toastSuccess,
+  toastError,
+  toastWarning,
+  toastInfo,
 }

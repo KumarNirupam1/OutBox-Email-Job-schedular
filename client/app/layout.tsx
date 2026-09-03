@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import QueryProvider from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 
 const figtreeHeading = Figtree({ subsets: ['latin'], variable: '--font-heading' });
 
@@ -46,6 +47,7 @@ export default function RootLayout({
           <QueryProvider>
             {children}
           </QueryProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
