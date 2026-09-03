@@ -84,6 +84,7 @@ router.get('/callback', async (req, res) => {
     }
 
     // Exchange code for webhook URL
+    const redirectUri = `${process.env.BACKEND_URL ?? 'http://localhost:8080'}/api/slack/callback`;
     const response = await fetch('https://slack.com/api/oauth.v2.access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -91,6 +92,7 @@ router.get('/callback', async (req, res) => {
         client_id: process.env.SLACK_CLIENT_ID!,
         client_secret: process.env.SLACK_CLIENT_SECRET!,
         code: code as string,
+        redirect_uri: redirectUri,
       }),
     });
 
