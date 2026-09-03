@@ -26,11 +26,7 @@ export const auth = betterAuth({
 	}),
 	account: {
 		storeStateStrategy: "database",
-		// The signed state cookie is set during a cross-origin XHR from the
-		// frontend. Browsers often block that as a third-party cookie, and
-		// 1.7.2 surfaces the resulting state_security_mismatch as
-		// `?error=state_mismatch`. Database state + the OAuth `state` query
-		// param still bind the callback to this flow.
+
 		skipStateCookieCheck: true,
 	},
 	advanced: {

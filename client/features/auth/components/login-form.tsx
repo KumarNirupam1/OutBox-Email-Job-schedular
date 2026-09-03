@@ -1,4 +1,3 @@
-// features/auth/components/LoginForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -72,9 +71,7 @@ export function LoginForm({
         setError(null);
         clearAuthState();
 
-        // Top-level navigation starts the OAuth flow on the backend domain so the
-        // OAuth state cookie is first-party (works cross-site between Vercel and
-        // the Render backend, and on localhost).
+        
         const backendUrl =
             process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
         const params = new URLSearchParams({ callbackURL: resolvedCallbackUrl });

@@ -8,7 +8,7 @@ import { emailSchema, validateAttachmentsSize } from '../validators/email.valida
 
 const router = Router();
 
-// Relaxed validation schema for better compatibility
+
 // POST /api/emails/schedule
 router.post('/schedule', async (req, res) => {
   try {
