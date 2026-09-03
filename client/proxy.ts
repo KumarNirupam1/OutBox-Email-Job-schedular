@@ -5,23 +5,35 @@ import {
     isUnauthenticatedRoute,
 } from "@/features/auth";
 
-async function fetchSession(request: NextRequest) {
-    const response = await fetch(
-        new URL("/api/auth/get-session", request.nextUrl.origin),
-        {
-            headers: {
-                cookie: request.headers.get("cookie") ?? "",
-            },
-            cache: "no-store",
-        },
-    );
+function getBackendUrl(): string {
+    return (
+        process.env.API_PROXY_TARGET ??
+        process.env.NEXT_PUBLIC_BACKEND_URL ??
+        "http://localhost:8080"
+    ).replace(/\/+$/, "");
+}
 
-    if (!response.ok) {
+async function fetchSession(request: NextRequest) {
+    try {
+        const response = await fetch(
+            `${getBackendUrl()}/api/auth/get-session`,
+            {
+                headers: {
+                    cookie: request.headers.get("cookie") ?? "",
+                },
+                cache: "no-store",
+            },
+        );
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data = await response.json();
+        return data?.user ? data : null;
+    } catch {
         return null;
     }
-
-    const data = await response.json();
-    return data?.user ? data : null;
 }
 
 export async function proxy(request: NextRequest) {

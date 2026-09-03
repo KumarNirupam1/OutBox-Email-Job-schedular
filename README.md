@@ -354,8 +354,7 @@ npm run dev        # http://localhost:3000
 
 | Variable | Description |
 |----------|-------------|
-| `API_PROXY_TARGET` | **Backend origin** the Next.js app proxies `/api/*` to (server-side env, e.g. `https://outbox-6gtb.onrender.com`). Defaults to `http://localhost:8080` locally |
-| `NEXT_PUBLIC_APP_URL` | **Frontend origin** used by the server-side `getSession()` for the same-origin session fetch (e.g. `https://out-box-eight.vercel.app`; defaults to `http://localhost:3000`) |
+| `API_PROXY_TARGET` | **Backend origin** the Next.js app proxies `/api/*` to **and** that the server-side `getSession()`/route guard fetch directly (server-to-server). Set this server-side env on Vercel, e.g. `https://outbox-6gtb.onrender.com`. Falls back to `NEXT_PUBLIC_BACKEND_URL`, then `http://localhost:8080` locally |
 
 ---
 
@@ -390,16 +389,15 @@ npm run dev        # http://localhost:3000
 
 ---
 
-## Deployment
+## Deployment (Vercel frontend + Render backend)
 
-See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full production deployment guide (Vercel + Render), including Google/Slack OAuth setup and the same-origin proxy configuration.
+To deploy, just set these env vars and redeploy both services:
 
-**Same-origin proxy (deployment checklist):**
-1. **Render**: set `FRONTEND_URL=https://out-box-eight.vercel.app` so better-auth's `baseURL` and the Google OAuth `redirect_uri` resolve on the app origin.
-2. **Vercel**: set the server-side env `API_PROXY_TARGET=https://outbox-6gtb.onrender.com` and `NEXT_PUBLIC_APP_URL=https://out-box-eight.vercel.app`.
-3. **Google Cloud console**: add the redirect URI **`https://out-box-eight.vercel.app/api/auth/callback/google`** (in addition to the existing backend one). This is required because the callback now runs on the frontend origin.
+- **Render**: `FRONTEND_URL=https://out-box-eight.vercel.app` (makes the session cookie first-party on the app origin).
+- **Vercel**: `API_PROXY_TARGET=https://outbox-6gtb.onrender.com` (server-side env; `/api/*` is proxied to it).
+- **Google Cloud console**: add the redirect URI `https://out-box-eight.vercel.app/api/auth/callback/google`.
 
-After these are set and both services are redeployed, log in from a **fresh/incognito** browser — the name/email/avatar will now appear because the session cookie is first-party.
+Slack OAuth: add `https://<backend>/api/slack/callback` as a redirect URL in the Slack app.
 
 ---
 
