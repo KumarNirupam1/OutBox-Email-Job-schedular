@@ -1,9 +1,21 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./db.js";
+import { backendUrl, frontendUrl, joinUrl } from "./url.js";
 
-const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8080";
-const frontendUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const isSecure = backendUrl.startsWith("https://");
+
+/**
+ * Cross-site cookie attrs for a split Vercel frontend + Render backend.
+ * In better-auth 1.7.2 these are applied to every cookie created via
+ * createCookieGetter — including `__Secure-better-auth.state`.
+ */
+const crossSiteCookieAttributes = {
+	secure: isSecure,
+	sameSite: (isSecure ? "none" : "lax") as "none" | "lax",
+	path: "/",
+	httpOnly: true,
+};
 
 export const auth = betterAuth({
 	baseURL: backendUrl,
@@ -12,12 +24,27 @@ export const auth = betterAuth({
 	database: prismaAdapter(prisma, {
 		provider: "postgresql",
 	}),
+	account: {
+		storeStateStrategy: "database",
+		// The signed state cookie is set during a cross-origin XHR from the
+		// frontend. Browsers often block that as a third-party cookie, and
+		// 1.7.2 surfaces the resulting state_security_mismatch as
+		// `?error=state_mismatch`. Database state + the OAuth `state` query
+		// param still bind the callback to this flow.
+		skipStateCookieCheck: true,
+	},
 	advanced: {
 		disableOriginCheck: true,
-		defaultCookieAttributes: {
-			secure: true,
-			sameSite: "none",
+		useSecureCookies: isSecure,
+		defaultCookieAttributes: crossSiteCookieAttributes,
+		cookies: {
+			state: { attributes: crossSiteCookieAttributes },
+			oauth_state: { attributes: crossSiteCookieAttributes },
+			session_token: { attributes: crossSiteCookieAttributes },
 		},
+	},
+	onAPIError: {
+		errorURL: joinUrl(frontendUrl, "/login"),
 	},
 	emailAndPassword: {
 		enabled: true,

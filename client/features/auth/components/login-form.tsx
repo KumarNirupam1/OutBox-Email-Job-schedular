@@ -72,24 +72,13 @@ export function LoginForm({
         setError(null);
         clearAuthState();
 
-        const { data, error } = await signIn.social({
-            provider: "google",
-            callbackURL: resolvedCallbackUrl,
-            newUserCallbackURL: resolvedCallbackUrl,
-        });
-
-        if (error) {
-            setError(error.message ?? "Something went wrong. Please try again.");
-            setIsLoading(false);
-            return;
-        }
-
-        if (data?.url && data.redirect) {
-            window.location.href = data.url;
-            return;
-        }
-
-        setIsLoading(false);
+        // Top-level navigation starts the OAuth flow on the backend domain so the
+        // OAuth state cookie is first-party (works cross-site between Vercel and
+        // the Render backend, and on localhost).
+        const backendUrl =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+        const params = new URLSearchParams({ callbackURL: resolvedCallbackUrl });
+        window.location.href = `${backendUrl.replace(/\/+$/, "")}/api/oauth/google?${params.toString()}`;
     }
 
     async function handleEmailSignIn(e: React.FormEvent) {

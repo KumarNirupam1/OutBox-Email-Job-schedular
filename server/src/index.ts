@@ -10,6 +10,7 @@ import slackRoutes from './routes/slack.routes';
 import emailRoutes from './routes/email.routes';
 import searchRoutes from './routes/search.routes';
 import senderRoutes from './routes/sender.routes';
+import oauthRoutes from './routes/oauth.routes';
 
 
 import { emailWorker } from './workers/email.worker';
@@ -44,6 +45,7 @@ app.use(express.json());
 app.all('/api/auth/{*path}', toNodeHandler(auth));
 
 // App routes
+app.use('/api/oauth', oauthRoutes);
 app.use('/api/slack', slackRoutes);
 app.use('/api/senders', senderRoutes);
 // NOTE: searchRoutes must be registered BEFORE emailRoutes. Otherwise the
