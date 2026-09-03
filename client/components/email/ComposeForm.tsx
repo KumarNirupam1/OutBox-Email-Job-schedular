@@ -300,7 +300,7 @@ export function ComposeForm() {
           
           {/* From */}
           <span className="py-3 text-muted-foreground font-medium">From</span>
-          <Input value={senders?.[0]?.email || user?.email || ""} readOnly placeholder="Loading..." className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 text-sm" />
+          <Input value={user?.email || senders?.[0]?.email || ""} readOnly placeholder="Loading..." className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 text-sm" />
           
           {/* To */}
           <span className="py-3 text-muted-foreground font-medium">To</span>

@@ -35,11 +35,19 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Reuse an existing sender if one already exists for this user.
+    // Reuse an existing sender if one already exists for this user,
+    // ensuring its email reflects the logged-in user (not an Ethereal address).
     const existing = await prisma.sender.findFirst({
       where: { userId: session.user.id },
     });
     if (existing) {
+      if (session.user.email && existing.email !== session.user.email) {
+        const updated = await prisma.sender.update({
+          where: { id: existing.id },
+          data: { email: session.user.email },
+        });
+        return res.status(200).json(updated);
+      }
       return res.status(200).json(existing);
     }
 
