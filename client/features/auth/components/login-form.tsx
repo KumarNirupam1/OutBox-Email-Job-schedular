@@ -71,11 +71,8 @@ export function LoginForm({
         setError(null);
         clearAuthState();
 
-        
-        const backendUrl =
-            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
         const params = new URLSearchParams({ callbackURL: resolvedCallbackUrl });
-        window.location.href = `${backendUrl.replace(/\/+$/, "")}/api/oauth/google?${params.toString()}`;
+        window.location.href = `/api/oauth/google?${params.toString()}`;
     }
 
     async function handleEmailSignIn(e: React.FormEvent) {

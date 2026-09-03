@@ -1,6 +1,6 @@
 import { EmailJob, SchedulePayload, Sender } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const API_BASE = "";
 
 export interface EmailSearchResponse {
   query: string;

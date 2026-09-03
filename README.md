@@ -170,10 +170,12 @@ client/
 
 ### 1. Google Login (better-auth)
 
-1. User clicks **Login with Google** → the client triggers a first-party navigation to `GET /api/oauth/google` on the backend (so the OAuth state cookie is first-party even though the UI lives on a different origin).
-2. better-auth stores the OAuth state in the database, redirects to Google, and after consent redirects back to `/api/auth/callback/google`.
-3. A session is created in PostgreSQL and a `SameSite=None; Secure` session cookie is set on the backend domain, so it survives cross-site requests from the frontend.
-4. The user is redirected to `/dashboard/scheduled`. The header/sidebar render the logged-in user's name, email, and avatar.
+1. User clicks **Login with Google** → the client does a first-party navigation to `/api/oauth/google`, which the Next.js app **proxies to the backend** (`rewrites` in `next.config.ts`). This keeps everything on the same origin as the UI.
+2. better-auth stores the OAuth state in the database, redirects to Google, and after consent redirects back to `/api/auth/callback/google` — also proxied, and because the server's `baseURL` points at the **frontend origin**, this callback runs through the app (not directly at the backend origin).
+3. A session is created in PostgreSQL and a **first-party `Secure` session cookie is set on the frontend origin** (the `Set-Cookie` passes back through the proxy).
+4. The user is redirected to `/dashboard/scheduled`. The header/sidebar call same-origin `getSession()`, send the first-party cookie, and render the user's name, email, and avatar.
+
+> **Why same-origin?** With a split Vercel frontend + Render backend, a cookie set on the backend domain becomes a **third-party** cookie to the frontend, and browsers with third-party cookies blocked (Chrome incognito / fresh profiles) drop it — so the avatar/name never appeared. Proxying `/api/*` through the app makes the session cookie **first-party**, so login state works in every browser.
 
 ### 2. Scheduling an email (request lifecycle)
 
@@ -332,12 +334,12 @@ npm run dev        # http://localhost:3000
 | Variable | Description |
 |----------|-------------|
 | `PORT` | API port (default `8080`) |
-| `FRONTEND_URL` | Frontend origin (CORS) |
-| `BACKEND_URL` | Backend base URL, used for auth + Slack redirect |
+| `FRONTEND_URL` | **Frontend origin** (e.g. `https://out-box-eight.vercel.app`). Used as better-auth's `baseURL` so OAuth callbacks and the session cookie resolve on the app origin (same-origin proxy) — also the CORS/trusted origin |
+| `BACKEND_URL` | Backend base URL, used for Slack redirect (and left trusted for the proxy) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `REDIS_URL` | Redis/Upstash connection string (supports `rediss://` TLS) |
 | `BETTER_AUTH_SECRET` | Secret used by better-auth (also signs Slack OAuth state) |
-| `BETTER_AUTH_URL` | Trusted frontend origin for auth |
+| `BETTER_AUTH_URL` | Optional override of the auth `baseURL` (falls back to `FRONTEND_URL`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
 | `ELASTICSEARCH_URL` | Elasticsearch endpoint (required for full search; if unset the Postgres fallback is used) |
 | `ELASTICSEARCH_API_KEY` | ES API key, or `ELASTICSEARCH_USERNAME`/`ELASTICSEARCH_PASSWORD` |
@@ -352,7 +354,8 @@ npm run dev        # http://localhost:3000
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_BACKEND_URL` | Backend API base URL |
+| `API_PROXY_TARGET` | **Backend origin** the Next.js app proxies `/api/*` to (server-side env, e.g. `https://outbox-6gtb.onrender.com`). Defaults to `http://localhost:8080` locally |
+| `NEXT_PUBLIC_APP_URL` | **Frontend origin** used by the server-side `getSession()` for the same-origin session fetch (e.g. `https://out-box-eight.vercel.app`; defaults to `http://localhost:3000`) |
 
 ---
 
@@ -389,7 +392,14 @@ npm run dev        # http://localhost:3000
 
 ## Deployment
 
-See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full production deployment guide (Vercel + Render), including Google/Slack OAuth setup and the cross-site cookie configuration.
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full production deployment guide (Vercel + Render), including Google/Slack OAuth setup and the same-origin proxy configuration.
+
+**Same-origin proxy (deployment checklist):**
+1. **Render**: set `FRONTEND_URL=https://out-box-eight.vercel.app` so better-auth's `baseURL` and the Google OAuth `redirect_uri` resolve on the app origin.
+2. **Vercel**: set the server-side env `API_PROXY_TARGET=https://outbox-6gtb.onrender.com` and `NEXT_PUBLIC_APP_URL=https://out-box-eight.vercel.app`.
+3. **Google Cloud console**: add the redirect URI **`https://out-box-eight.vercel.app/api/auth/callback/google`** (in addition to the existing backend one). This is required because the callback now runs on the frontend origin.
+
+After these are set and both services are redeployed, log in from a **fresh/incognito** browser — the name/email/avatar will now appear because the session cookie is first-party.
 
 ---
 

@@ -3,7 +3,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./db.js";
 import { backendUrl, frontendUrl, joinUrl } from "./url.js";
 
-const isSecure = backendUrl.startsWith("https://");
+// The auth flow is served through the frontend origin (the Next.js app proxies
+// `/api/*` to this backend). Setting better-auth's baseURL to the frontend
+// makes the Google OAuth redirect URI and callback resolve on the app origin,
+// so the session cookie is issued there as a first-party cookie — required for
+// login/avatar to work in every browser (including incognito, where third-party
+// cookies are blocked).
+const isSecure = frontendUrl.startsWith("https://");
 
 /**
  * Cross-site cookie attrs for a split Vercel frontend + Render backend.
@@ -18,7 +24,7 @@ const crossSiteCookieAttributes = {
 };
 
 export const auth = betterAuth({
-	baseURL: backendUrl,
+	baseURL: process.env.AUTH_BASE_URL ?? frontendUrl,
 	secret: process.env.BETTER_AUTH_SECRET!,
 	trustedOrigins: [frontendUrl, backendUrl],
 	database: prismaAdapter(prisma, {

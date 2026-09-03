@@ -1,7 +1,5 @@
 import { createAuthClient } from "better-auth/react";
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8080";
-
 export function clearAuthState() {
 	if (typeof document === "undefined") {
 		return;
@@ -34,8 +32,6 @@ export function clearAuthState() {
 	}
 }
 
-export const authClient = createAuthClient({
-	baseURL: backendUrl,
-});
+export const authClient = createAuthClient();
 
 export const { signIn, signOut, useSession } = authClient;

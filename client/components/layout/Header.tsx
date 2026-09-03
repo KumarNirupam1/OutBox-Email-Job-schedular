@@ -20,8 +20,7 @@ function getListQueryKeys(pathname: string): string[][] {
 }
 
 async function getSlackStatus() {
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-  const response = await fetch(`${backendUrl}/api/slack/status`, {
+  const response = await fetch(`/api/slack/status`, {
     credentials: "include",
   });
 
@@ -53,8 +52,7 @@ export function Header() {
   const isSlackConnected = slackStatus?.connected || justConnected;
 
   const handleConnectSlack = () => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-    window.open(`${backendUrl}/api/slack/connect`, "_self");
+    window.open(`/api/slack/connect`, "_self");
   };
 
   const handleRefresh = async () => {
