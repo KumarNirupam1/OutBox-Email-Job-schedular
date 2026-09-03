@@ -383,6 +383,8 @@ npm run dev        # http://localhost:3000
 - **Rate-limit durability:** Redis counters can drift only if keys are lost between restarts; the 1-hour TTL + atomic `INCR` keep this safe for the expected workload. A DB-backed counter would be an alternative where stricter durability is needed.
 - **No cron anywhere** — scheduling is exclusively BullMQ delayed jobs, as required.
 
+> **Note (Chrome "dangerous site" warning):** Chrome may show a "Deceptive site ahead / dangerous site" warning for the **shared `*.onrender.com` subdomain** used by the deployed backend. This is a Google Safe Browsing flag on the recycled/shared Render subdomain — it affects only Chrome and is **not** caused by this codebase (the app works normally in other browsers such as Edge, and the OAuth + scheduling flow functions correctly). It is cosmetic and self-resolving over time; attaching a **custom domain** to the Render service permanently clears it. Local development is unaffected.
+
 ---
 
 ## Deployment
