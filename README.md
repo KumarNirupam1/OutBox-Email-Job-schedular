@@ -399,6 +399,14 @@ To deploy, just set these env vars and redeploy both services:
 
 Slack OAuth: add `https://<backend>/api/slack/callback` as a redirect URL in the Slack app.
 
+**Live URLs:**
+- App: `https://out-box-eight.vercel.app`
+- Backend: `https://outbox-6gtb.onrender.com`
+- **Bull Board dashboard:** `https://outbox-6gtb.onrender.com/admin/queues` — live view of the `email-sending` queue (Waiting / Active / Delayed / Completed / Failed). It lives on the **backend origin** (not proxied) and is a debug dashboard, so keep it private.
+- Health check: `https://outbox-6gtb.onrender.com/api/health`
+
+> ⚠️ **Render free tier sleeps** after ~15 min idle. If the app or dashboard seems down, hit any endpoint once (e.g. the frontend `/api/health`) to wake it, then reload.
+
 ---
 
 ## License
